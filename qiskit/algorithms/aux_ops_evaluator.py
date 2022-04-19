@@ -77,7 +77,6 @@ def eval_observables(
 
     # Create new CircuitSampler to avoid breaking existing one's caches.
     sampler = CircuitSampler(quantum_instance)
-
     list_op = _prepare_list_op(quantum_state, observables)
     observables_expect = expectation.convert(list_op)
     observables_expect_sampled = sampler.convert(observables_expect)
@@ -177,7 +176,7 @@ def _compute_std_devs(
     Returns:
         A list of standard deviations.
     """
-    variances = np.real(expectation.compute_variance(observables_expect_sampled))
+    variances = 0 # np.real(expectation.compute_variance(observables_expect_sampled))
     if not isinstance(variances, np.ndarray) and variances == 0.0:
         # when `variances` is a single value equal to 0., our expectation value is exact and we
         # manually ensure the variances to be a list of the correct length
