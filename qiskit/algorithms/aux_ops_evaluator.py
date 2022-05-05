@@ -16,7 +16,6 @@ from typing import Tuple, Union, List
 import numpy as np
 
 from qiskit import QuantumCircuit
-from qiskit.algorithms.minimum_eigen_solvers.minimum_eigen_solver import ListOrDict
 from qiskit.opflow import (
     CircuitSampler,
     ListOp,
@@ -27,6 +26,8 @@ from qiskit.opflow import (
 from qiskit.providers import BaseBackend, Backend
 from qiskit.quantum_info import Statevector
 from qiskit.utils import QuantumInstance
+
+from .list_or_dict import ListOrDict
 
 
 def eval_observables(
@@ -76,7 +77,6 @@ def eval_observables(
 
     # Create new CircuitSampler to avoid breaking existing one's caches.
     sampler = CircuitSampler(quantum_instance)
-
     list_op = _prepare_list_op(quantum_state, observables)
     observables_expect = expectation.convert(list_op)
     observables_expect_sampled = sampler.convert(observables_expect)
@@ -121,6 +121,7 @@ def _prepare_list_op(
     """
     if isinstance(observables, dict):
         observables = list(observables.values())
+
     if not isinstance(quantum_state, StateFn):
         quantum_state = StateFn(quantum_state)
 
