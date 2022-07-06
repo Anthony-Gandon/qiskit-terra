@@ -201,6 +201,13 @@ class NumPyEigensolver(Eigensolver):
     def _eval_transition_amplitudes(
         aux_operators: ListOrDict[OperatorBase], wavefn, wavefm, threshold: float = 1e-12
     ) -> ListOrDict[Tuple[complex, complex]]:
+        """Evaluate the transition amplitudes for the states n and m and the list of auxiliaries.
+
+        The formula we use here is a simpler version of Eq. 13 in
+        https://doi.org/10.1103%2Fphysrevresearch.3.023244. It is defined only for n!=m.
+        If n=m, then the _eval_aux_operators must be used instead.
+
+        """
 
         values: ListOrDict[Tuple[complex, complex]]
 
@@ -221,22 +228,24 @@ class NumPyEigensolver(Eigensolver):
                 # Terra doesn't support sparse yet, so do the matmul directly if so
                 # This is necessary for the particle_hole and other chemistry tests because the
                 # pauli conversions are 2^12th large and will OOM error if not sparse.
-                if False:
+                if isinstance(mat, scisparse.spmatrix):
                     value = mat.dot(wavefn).dot(np.conj(wavefm))
                 else:
-                    wavefnfm_plus = 1/np.sqrt(2)*(wavefn + wavefm)
-                    wavefnfm_minus = 1/np.sqrt(2)*(wavefn - wavefm)
-                    wavefnfm_i_plus = 1/np.sqrt(2)*(wavefn + 1j*wavefm)
-                    wavefnfm_i_minus = 1/np.sqrt(2)*(wavefn + 1j*wavefm)
-                    real_value = 1/2 * (
-                        StateFn(operator, is_measurement=True).eval(wavefnfm_plus) - \
-                        StateFn(operator, is_measurement=True).eval(wavefnfm_minus)
+                    wavefnfm_plus = 1 / np.sqrt(2) * (wavefn + wavefm)
+                    wavefnfm_minus = 1 / np.sqrt(2) * (wavefn - wavefm)
+                    wavefnfm_i_plus = 1 / np.sqrt(2) * (wavefn + 1j * wavefm)
+                    wavefnfm_i_minus = 1 / np.sqrt(2) * (wavefn - 1j * wavefm)
+
+                    real_value = 0.5 * (
+                        StateFn(operator, is_measurement=True).eval(wavefnfm_plus)
+                        - StateFn(operator, is_measurement=True).eval(wavefnfm_minus)
                     )
-                    imag_value = 1/2 * (
-                        StateFn(operator, is_measurement=True).eval(wavefnfm_i_plus) - \
-                        StateFn(operator, is_measurement=True).eval(wavefnfm_i_minus)
+                    imag_value = -0.5 * (
+                        StateFn(operator, is_measurement=True).eval(wavefnfm_i_plus)
+                        - StateFn(operator, is_measurement=True).eval(wavefnfm_i_minus)
                     )
-                    value = 1/np.sqrt(2) * real_value + 1j * imag_value
+
+                    value = real_value + 1j * imag_value
                 value = value if np.abs(value) > threshold else 0.0
             # The value get's wrapped into a tuple: (mean, standard deviation).
             # Since this is an exact computation, the standard deviation is known to be zero.
@@ -247,7 +256,6 @@ class NumPyEigensolver(Eigensolver):
         self,
         operator: OperatorBase,
         aux_operators: Optional[ListOrDict[OperatorBase]] = None,
-        eval_transition_amplitudes: bool = False
     ) -> EigensolverResult:
         super().compute_eigenvalues(operator, aux_operators)
 
@@ -314,38 +322,84 @@ class NumPyEigensolver(Eigensolver):
         if self._ret.eigenstates is not None:
             self._ret.eigenstates = ListOp([StateFn(vec) for vec in self._ret.eigenstates])
 
-        # if eval_transition_amplitudes:
-        #     self._get_transition_amplitudes(aux_operators)
-
         logger.debug("EigensolverResult:\n%s", self._ret)
         return self._ret
 
     def compute_transition_amplitudes(
         self,
         aux_operators: Optional[ListOrDict[OperatorBase]],
-        transition_amplitude_pairs: Optional[ListOrDict]
-    ) -> None:
+        transition_amplitude_pairs: Optional[ListOrDict[Tuple[int, int]]],
+    ) -> Optional[ListOrDict[Tuple[complex, complex]]]:
+        """Computes the transition amplitudes for the desired auxiliary operators and eigenstates.
+        Args:
+            aux_operators: ListOrDict of auxiliary operators.
+            transition_amplitude_pairs: Dictionary specifying the names of the auxiliary operators
+            to consider, and the pairs of indices to take into account for the eigenstates.
+
+        Returns:
+            Dictionary of the resulting transition amplitudes. The keys of the result are
+            constructed with the following formula: aux_str + "_" + str(i) + "_" + str(j)
+
+        .. code-block::python
+
+            # Prepares the problem.
+            driver = PySCFDriver(
+                atom="H .0 .0 .0; H .0 .0 1.75",
+                unit=UnitsType.ANGSTROM,
+                charge=0,
+                spin=0,
+                basis="sto3g"
+            )
+            solver = NumPyEigensolverFactory()
+            qubit_converter = QubitConverter(JordanWignerMapper())
+            esc = ExcitedStatesEigensolver(qubit_converter, solver)
+
+            # Prepares the auxiliary operators and specify the pairs for the transition amplitudes.
+            electronic_structure_problem = ElectronicStructureProblem(driver)
+            aux_str = 'NB'
+            aux_op = electronic_structure_problem.second_q_ops()['ParticleNumber']
+            aux_operators = [aux_str: aux_op]
+            transition_amplitude_pairs = {
+                'names': ['PN'],
+                'indices': [(0, 1),
+                            (1, 0), (1, 2),
+                            (2, 0), (2, 1), (2, 3)]
+            }
+
+            # Maps the aux_operators to qubit operators.
+            main_operator, aux_ops = esc.get_qubit_operators(
+                electronic_structure_problem, aux_operators
+            )
+            # Computes the eigenstates of the Hamiltonian.
+            results = esc.solve(self.electronic_structure_problem)
+            # Evaluates the transition amplitudes.
+            transition_amplitude_vals = esc.solver.compute_transition_amplitudes(
+                aux_ops, transition_amplitude_pairs
+            )
+            # transition_amplitude_vals = {
+            #     'PN_0_1': (0.0, 0.0),
+            #     'PN_1_0': (0.0, 0.0), 'PN_1_2': (0.0, 0.0),
+            #     'PN_2_0': (0.0, 0.0), 'PN_2_1': (0.0, 0.0), 'PN_2_3': (0.0, 0.0)
+            # }
+            # This is expected because the ParticleNumber operator is diagonal in the excited state
+            # basis.
+        """
 
         transition_amplitude_vals = None
 
         if aux_operators is not None and transition_amplitude_pairs is not None:
+
             restricted_aux_ops = {}
-            for name in transition_amplitude_pairs['names']:
+            for name in transition_amplitude_pairs["names"]:
                 restricted_aux_ops[name] = aux_operators[name]
 
             transition_amplitude_vals = {}
-            for pair in transition_amplitude_pairs['indices']:
-                i = pair[0]
-                j = pair[1]
-                temp_results =\
-                    self._eval_transition_amplitudes(
-                        restricted_aux_ops,
-                        self._ret.eigenstates[i],
-                        self._ret.eigenstates[j]
-                    )
-                for aux_str, aux_res in temp_results.items():
-                    transition_amplitude_vals[aux_str+"_" + str(i) + "_" + str(j)] = aux_res
+            for pair in transition_amplitude_pairs["indices"]:
+                i, j = pair
+                temp_results = self._eval_transition_amplitudes(
+                    restricted_aux_ops, self._ret.eigenstates[i], self._ret.eigenstates[j]
+                )
+                for aux_str, aux_res in iter(temp_results):
+                    transition_amplitude_vals[aux_str + "_" + str(i) + "_" + str(j)] = aux_res
 
-        # self._ret.transition_amplitudes = \
         return transition_amplitude_vals
-
