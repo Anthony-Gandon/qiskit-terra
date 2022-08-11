@@ -21,7 +21,7 @@ from qiskit.opflow import (
     ListOp,
     StateFn,
     OperatorBase,
-    ExpectationBase, Gradient,
+    ExpectationBase,
 )
 from qiskit.providers import Backend
 from qiskit.quantum_info import Statevector
@@ -99,6 +99,7 @@ def eval_observables(
     # None operators are already dropped in compute_minimum_eigenvalue if observables is a dict.
 
     return _prepare_result(observables_results, observables)
+
 
 def _prepare_list_op(
     quantum_state: Union[
