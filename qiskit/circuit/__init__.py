@@ -177,6 +177,7 @@ Quantum Circuit Construction
    Clbit
    AncillaRegister
    AncillaQubit
+   CircuitInstruction
 
 Gates and Instructions
 ----------------------
@@ -187,11 +188,9 @@ Gates and Instructions
    Gate
    ControlledGate
    Delay
-   Barrier
-   Measure
-   Reset
    Instruction
    InstructionSet
+   Operation
    EquivalenceLibrary
 
 Control Flow Operations
@@ -234,6 +233,7 @@ from .gate import Gate
 from .controlledgate import ControlledGate
 from .instruction import Instruction
 from .instructionset import InstructionSet
+from .operation import Operation
 from .barrier import Barrier
 from .delay import Delay
 from .measure import Measure
@@ -241,9 +241,11 @@ from .reset import Reset
 from .parameter import Parameter
 from .parametervector import ParameterVector
 from .parameterexpression import ParameterExpression
+from .quantumcircuitdata import CircuitInstruction
 from .equivalence import EquivalenceLibrary
 from .classicalfunction.types import Int1, Int2
 from .classicalfunction import classical_function, BooleanExpression
+from .commutation_checker import CommutationChecker
 
 from .controlflow import (
     ControlFlowOp,
