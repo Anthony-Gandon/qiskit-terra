@@ -29,7 +29,7 @@ from qiskit.opflow import (
     ListOp,
     ExpectationFactory,
 )
-from qiskit.providers import Backend, BaseBackend
+from qiskit.providers import Backend
 from qiskit.quantum_info.operators.base_operator import BaseOperator
 from qiskit.utils import QuantumInstance
 
@@ -87,12 +87,12 @@ class HHL(LinearSolver):
     References:
 
         [1]: Harrow, A. W., Hassidim, A., Lloyd, S. (2009).
-        Quantum algorithm for linear systems of equations.
-        `Phys. Rev. Lett. 103, 15 (2009), 1–15. <https://doi.org/10.1103/PhysRevLett.103.150502>`_
+             Quantum algorithm for linear systems of equations.
+             `Phys. Rev. Lett. 103, 15 (2009), 1–15. <https://doi.org/10.1103/PhysRevLett.103.150502>`_
 
-        [2]: Carrera Vazquez, A., Hiptmair, R., & Woerner, S. (2020).
-        Enhancing the Quantum Linear Systems Algorithm using Richardson Extrapolation.
-        `arXiv:2009.04484 <http://arxiv.org/abs/2009.04484>`_
+        [2]: Carrera Vazquez, A., Hiptmair, R., & Woerner, S. (2022).
+             Enhancing the Quantum Linear Systems Algorithm Using Richardson Extrapolation.
+             `ACM Transactions on Quantum Computing 3, 1, Article 2 <https://doi.org/10.1145/3490631>`_
 
     """
 
@@ -100,7 +100,7 @@ class HHL(LinearSolver):
         self,
         epsilon: float = 1e-2,
         expectation: Optional[ExpectationBase] = None,
-        quantum_instance: Optional[Union[Backend, BaseBackend, QuantumInstance]] = None,
+        quantum_instance: Optional[Union[Backend, QuantumInstance]] = None,
     ) -> None:
         r"""
         Args:
@@ -142,9 +142,7 @@ class HHL(LinearSolver):
         return None if self._sampler is None else self._sampler.quantum_instance
 
     @quantum_instance.setter
-    def quantum_instance(
-        self, quantum_instance: Optional[Union[QuantumInstance, BaseBackend, Backend]]
-    ) -> None:
+    def quantum_instance(self, quantum_instance: Optional[Union[QuantumInstance, Backend]]) -> None:
         """Set quantum instance.
 
         Args:
