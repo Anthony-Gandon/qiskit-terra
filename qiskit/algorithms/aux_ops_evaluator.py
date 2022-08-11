@@ -28,7 +28,6 @@ from qiskit.quantum_info import Statevector
 from qiskit.utils import QuantumInstance
 
 from .list_or_dict import ListOrDict
-from ..circuit.parametertable import ParameterView
 
 
 def eval_observables(
@@ -82,93 +81,6 @@ def eval_observables(
     list_op = _prepare_list_op(quantum_state, observables)
     observables_expect = expectation.convert(list_op)
     observables_expect_sampled = sampler.convert(observables_expect)
-
-    # compute means
-    values = np.real(observables_expect_sampled.eval())
-
-    # compute standard deviations
-    std_devs = _compute_std_devs(
-        observables_expect_sampled, observables, expectation, quantum_instance
-    )
-
-    # Discard values below threshold
-    observables_means = values * (np.abs(values) > threshold)
-    # zip means and standard deviations into tuples
-    observables_results = list(zip(observables_means, std_devs))
-
-    # Return None eigenvalues for None operators if observables is a list.
-    # None operators are already dropped in compute_minimum_eigenvalue if observables is a dict.
-
-    return _prepare_result(observables_results, observables)
-
-def eval_derivative_ansatz(
-    quantum_instance: Union[QuantumInstance, BaseBackend, Backend],
-    quantum_state: Union[
-        Statevector,
-        QuantumCircuit,
-        OperatorBase,
-    ],
-    ansatz,
-    parameters,
-    observables: ListOrDict[OperatorBase],
-    expectation: ExpectationBase,
-    threshold: float = 1e-12,
-) -> ListOrDict[Tuple[complex, complex]]:
-    """
-    Accepts a list or a dictionary of operators and calculates their expectation values - means
-    and standard deviations. They are calculated with respect to a quantum state provided. A user
-    can optionally provide a threshold value which filters mean values falling below the threshold.
-
-    Args:
-        quantum_instance: A quantum instance used for calculations.
-        quantum_state: An unparametrized quantum circuit representing a quantum state that
-            expectation values are computed against.
-        observables: A list or a dictionary of operators whose expectation values are to be
-            calculated.
-        expectation: An instance of ExpectationBase which defines a method for calculating
-            expectation values.
-        threshold: A threshold value that defines which mean values should be neglected (helpful for
-            ignoring numerical instabilities close to 0).
-
-    Returns:
-        A list or a dictionary of tuples (mean, standard deviation).
-
-    Raises:
-        ValueError: If a ``quantum_state`` with free parameters is provided.
-    """
-
-    if (
-        isinstance(
-            quantum_state, (QuantumCircuit, OperatorBase)
-        )  # Statevector cannot be parametrized
-        and len(quantum_state.parameters) > 0
-    ):
-        raise ValueError(
-            "A parametrized representation of a quantum_state was provided. It is not "
-            "allowed - it cannot have free parameters."
-        )
-
-    # Create new CircuitSampler to avoid breaking existing one's caches.
-    sampler = CircuitSampler(quantum_instance)
-
-    list_op = _prepare_list_op(quantum_state, observables)
-    observables_expect = expectation.convert(list_op)
-    observables_expect_sampled = sampler.convert(observables_expect)
-
-    # Begin Modif
-    list_op_ansatz = _prepare_list_op(ansatz, observables)
-
-    print(list_op_ansatz[0])
-    print(ansatz.parameters)
-    state_grad = Gradient(grad_method='param_shift').convert(
-        operator=list_op_ansatz
-    )
-    bound_states = state_grad.bind_parameters(parameters)
-    state_grad_expect = expectation.convert(bound_states)
-    state_grad_expect_sampled = sampler.convert(state_grad_expect)
-    print(np.real(state_grad_expect_sampled.eval()))
-
-    # End Modif
 
     # compute means
     values = np.real(observables_expect_sampled.eval())
