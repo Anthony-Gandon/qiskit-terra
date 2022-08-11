@@ -199,7 +199,7 @@ class NumPyEigensolver(Eigensolver):
 
     @staticmethod
     def _eval_transition_amplitudes(
-        aux_operators: ListOrDict[OperatorBase], wavefn, wavefm, threshold: float = 1e-12
+        aux_operators: ListOrDict[OperatorBase], wavefn: object, wavefm: object, threshold: float = 1e-12
     ) -> ListOrDict[Tuple[complex, complex]]:
         """Evaluate the transition amplitudes for the states n and m and the list of auxiliaries.
 
@@ -228,7 +228,7 @@ class NumPyEigensolver(Eigensolver):
                 # Terra doesn't support sparse yet, so do the matmul directly if so
                 # This is necessary for the particle_hole and other chemistry tests because the
                 # pauli conversions are 2^12th large and will OOM error if not sparse.
-                if isinstance(mat, scisparse.spmatrix):
+                if False:
                     value = mat.dot(wavefn).dot(np.conj(wavefm))
                 else:
                     wavefnfm_plus = 1 / np.sqrt(2) * (wavefn + wavefm)
@@ -328,6 +328,7 @@ class NumPyEigensolver(Eigensolver):
     def compute_transition_amplitudes(
         self,
         aux_operators: Optional[ListOrDict[OperatorBase]],
+        transition_amplitude_names: Optional[ListOrDict[str]],
         transition_amplitude_pairs: Optional[ListOrDict[Tuple[int, int]]],
     ) -> Optional[ListOrDict[Tuple[complex, complex]]]:
         """Computes the transition amplitudes for the desired auxiliary operators and eigenstates.
@@ -390,16 +391,16 @@ class NumPyEigensolver(Eigensolver):
         if aux_operators is not None and transition_amplitude_pairs is not None:
 
             restricted_aux_ops = {}
-            for name in transition_amplitude_pairs["names"]:
+            for name in transition_amplitude_names:
                 restricted_aux_ops[name] = aux_operators[name]
 
             transition_amplitude_vals = {}
-            for pair in transition_amplitude_pairs["indices"]:
+            for pair in transition_amplitude_pairs:
                 i, j = pair
                 temp_results = self._eval_transition_amplitudes(
                     restricted_aux_ops, self._ret.eigenstates[i], self._ret.eigenstates[j]
                 )
-                for aux_str, aux_res in iter(temp_results):
+                for aux_str, aux_res in temp_results.items():
                     transition_amplitude_vals[aux_str + "_" + str(i) + "_" + str(j)] = aux_res
 
         return transition_amplitude_vals
