@@ -226,6 +226,92 @@ class NumPyEigensolver(Eigensolver):
             # and the variance is known to be zero.
             values[key] = (value, {"variance": 0.0})
         return values
+    
+
+    @classmethod
+    def eval_transition_amplitude(
+        cls,
+        aux_operators: ListOrDict[BaseException | PauliSumOp],
+        wavefn,
+        wavefm,
+        threshold: float = 1e-12,
+    ) -> ListOrDict[tuple[complex, complex]]:
+        """Evaluate the transition amplitudes for two eigenstates wavefi, wavefj and a list of
+        auxiliaries.
+
+        The formula we use here is a simpler version of Eq. 13 in
+        https://doi.org/10.1103%2Fphysrevresearch.3.023244.
+        It is only defined for i!=j.
+
+        """
+        values: ListOrDict[tuple[complex, complex]]
+
+        # As a list, aux_operators can contain None operators for which None values are returned.
+        # As a dict, the None operators in aux_operators have been dropped in compute_eigenvalues.
+        if isinstance(aux_operators, list):
+            values = [None] * len(aux_operators)
+            key_op_iterator = enumerate(aux_operators)
+        else:
+            values = {}
+            key_op_iterator = aux_operators.items()
+
+        for key, operator in key_op_iterator:
+            if operator is None:
+                continue
+
+            if operator.num_qubits is None or operator.num_qubits < 1:
+                logger.info(
+                    "The number of qubits of the %s operator must be greater than zero.", key
+                )
+                continue
+
+            op_matrix = None
+            if isinstance(operator, PauliSumOp):
+                if operator.coeff != 0:
+                    op_matrix = operator.to_spmatrix()
+            else:
+                try:
+                    op_matrix = operator.to_matrix(sparse=True)
+                except TypeError:
+                    logger.debug(
+                        "WARNING: operator of type `%s` does not support sparse matrices. "
+                        "Trying dense computation",
+                        type(operator),
+                    )
+                try:
+                    op_matrix = operator.to_matrix()
+                except AttributeError as ex:
+                    raise AlgorithmError(f"Unsupported operator type {type(operator)}.") from ex
+
+            if isinstance(op_matrix, scisparse.csr_matrix):
+                value = op_matrix.dot(wavefm).dot(np.conj(wavefn))
+            elif isinstance(op_matrix, np.ndarray):
+                wavefnm_re_plus = 1 / np.sqrt(2) * (wavefn + wavefm)
+                wavefnm_re_minus = 1 / np.sqrt(2) * (wavefn - wavefm)
+                wavefnm_im_plus = 1 / np.sqrt(2) * (wavefn + 1j * wavefm)
+                wavefnm_im_minus = 1 / np.sqrt(2) * (wavefn - 1j * wavefm)
+                value = Statevector(wavefn).expectation_value(operator)
+                real_value = 0.5 * (
+                    Statevector(wavefnm_re_plus).expectation_value(operator) - 
+                    Statevector(wavefnm_re_minus).expectation_value(operator)
+                )
+                imag_value = -0.5 * (
+                    Statevector(wavefnm_im_plus).expectation_value(operator) - 
+                    Statevector(wavefnm_im_minus).expectation_value(operator)
+                )
+                value = 1 / np.sqrt(2) * (real_value + 1j * imag_value)
+
+
+            else:
+                value = 0.0
+
+            value = value if np.abs(value) > threshold else 0.0
+            # The value gets wrapped into a tuple: (mean, metadata).
+            # The metadata includes variance (and, for other eigensolvers, shots).
+            # Since this is an exact computation, there are no shots
+            # and the variance is known to be zero.
+            values[key] = (value, {"variance": 0.0})
+        return values
 
     def compute_eigenvalues(
         self,
@@ -296,10 +382,16 @@ class NumPyEigensolver(Eigensolver):
 
             self._k = k_orig
 
+        ta_op_vals = {}
+        for i in range(len(eigvals)):    
+            for j in range(len(eigvals)):
+                ta_op_vals[(i, j)] = self.eval_transition_amplitude(aux_operators, eigvecs[i], eigvecs[j])
+
         result = NumPyEigensolverResult()
         result.eigenvalues = eigvals
         result.eigenstates = [Statevector(vec) for vec in eigvecs]
         result.aux_operators_evaluated = aux_op_vals
+        result.transition_amplitudes = ta_op_vals
 
         logger.debug("NumpyEigensolverResult:\n%s", result)
         return result
