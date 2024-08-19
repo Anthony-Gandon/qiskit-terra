@@ -1057,7 +1057,7 @@ def plot_coupling_map(
 
     if font_size is None:
         max_characters = max(1, max(len(str(x)) for x in qubit_labels))
-        font_size = max(int(40 / max_characters), 1)
+        font_size = max(int(30 / max_characters), 1)
 
     def color_node(node):
         if qubit_coordinates:
@@ -1098,7 +1098,7 @@ def plot_coupling_map(
         graph_attributes = {
             "overlap_scaling": "-7",
             "overlap": "prism",
-            "model": "subset",
+            "model": "mds",
         }
     plot = graphviz_draw(
         graph,
